@@ -1,0 +1,6 @@
+wandb/
+weights/
+__pycache__/
+logs/
+results/
+data/
