@@ -142,7 +142,7 @@ if __name__ == "__main__":
         return parser.parse_args()
     args = parse_args()
     
-    now = datetime.datetime.now()
+    now = datetime.now()
     formatted_time = now.strftime("%m.%d.%H.%M")
     
     pretrained_name = 'train_fraction_{}-num_images_{}'.format(args.train_fraction, args.num_images)
