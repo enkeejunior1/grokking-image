@@ -189,6 +189,7 @@ if __name__ == "__main__":
     model.load_state_dict(state_dict)
     
     rf.model.eval()
+    print("Starting sampling {}".format(dl_all.__len__()))
     for i, (x_tgt, x_src, label_tgt) in enumerate(dl_all):
         _, x_src, label_tgt = x_tgt.cuda(), x_src.cuda(), label_tgt.cuda()
         batch_size_train = x_src.size(0)
