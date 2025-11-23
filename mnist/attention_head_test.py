@@ -65,6 +65,8 @@ class MNISTModularArithmeticDataset(Dataset):
         
         if split == 'train':
             self.data = [all_pairs[i] for i in indices[:train_size]]
+        elif split == 'all':
+            self.data = all_pairs
         else:
             self.data = [all_pairs[i] for i in indices[train_size:]]
     
@@ -139,9 +141,10 @@ if __name__ == "__main__":
         return parser.parse_args()
     args = parse_args()
     
-    exp_name = 'train_fraction_{}-num_images_{}'.format(args.train_fraction, args.num_images)
-    weights_dir = os.path.join(args.generative_model_path, exp_name)
-    results_dir = os.path.join(args.output_dir, exp_name)
+    pretrained_name = 'train_fraction_{}-num_images_{}'.format(args.train_fraction, args.num_images)
+    experiment_name = 'test_attention_head_{}'.format(pretrained_name)
+    weights_dir = os.path.join(args.generative_model_path, pretrained_name)
+    results_dir = os.path.join(args.output_dir, experiment_name)
     os.makedirs(weights_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
 
@@ -158,10 +161,13 @@ if __name__ == "__main__":
     rf = RF(model)
     optimizer = optim.Adam(model.parameters(), lr=5e-4)
     
-    ds_train = MNISTModularArithmeticDataset(p=10, split='train', train_fraction=args.train_fraction, num_images=args.num_images)
-    ds_valid = MNISTModularArithmeticDataset(p=10, split='valid', train_fraction=args.train_fraction, num_images=args.num_images)
-    dl_train = DataLoader(ds_train, batch_size=256, shuffle=True, drop_last=False)
-    dl_valid = DataLoader(ds_valid, batch_size=256, shuffle=False, drop_last=False)
+    # ds_train = MNISTModularArithmeticDataset(p=10, split='train', train_fraction=args.train_fraction, num_images=args.num_images)
+    # ds_valid = MNISTModularArithmeticDataset(p=10, split='valid', train_fraction=args.train_fraction, num_images=args.num_images)
+    # dl_train = DataLoader(ds_train, batch_size=256, shuffle=True, drop_last=False)
+    # dl_valid = DataLoader(ds_valid, batch_size=256, shuffle=False, drop_last=False)
+    
+    ds_all = MNISTModularArithmeticDataset(p=10, split='all', train_fraction=args.train_fraction, num_images=args.num_images)
+    dl_all = DataLoader(ds_all, batch_size=256, shuffle=False, drop_last=False)
 
     tol = 0
     
@@ -178,7 +184,20 @@ if __name__ == "__main__":
     
     model.load_state_dict(state_dict)
     
-    model.eval()
+    rf.model.eval()
+    for i, (x_tgt, x_src, label_tgt) in enumerate(dl_all):
+        _, x_src, label_tgt = x_tgt.cuda(), x_src.cuda(), label_tgt.cuda()
+        batch_size_train = x_src.size(0)
+        x_tgt = torch.randn(batch_size_train, 1, 32, 32).cuda()
+        
+        with torch.no_grad():
+            images = rf.sample(x_tgt, x_src)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+            num_vis = 4
+            result = torch.cat(
+                [x_src[:num_vis], images[-1][:num_vis]], dim=1
+            ).reshape(-1, 1, 32, 32)
+            tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention.png", nrow=3)
+        
+    
+    
