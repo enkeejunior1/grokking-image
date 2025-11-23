@@ -191,21 +191,19 @@ if __name__ == "__main__":
     rf.model.eval()
     print("Starting sampling {}".format(dl_all.__len__()))
     
-    print(dl_all.size())
-    
-    # for i, (x_tgt, x_src, label_tgt) in enumerate(dl_all):
-    #     _, x_src, label_tgt = x_tgt.cuda(), x_src.cuda(), label_tgt.cuda()
-    #     batch_size_train = x_src.size(0)
-    #     x_tgt = torch.randn(batch_size_train, 1, 32, 32).cuda()
+    for i, (x_tgt, x_src, label_tgt) in enumerate(dl_all):
+        _, x_src, label_tgt = x_tgt.cuda(), x_src.cuda(), label_tgt.cuda()
+        batch_size_train = x_src.size(0)
+        x_tgt = torch.randn(batch_size_train, 1, 32, 32).cuda()
         
-    #     with torch.no_grad():
-    #         images = rf.sample(x_tgt, x_src)
+        with torch.no_grad():
+            images = rf.sample(x_tgt, x_src)
 
-    #         num_vis = 4
-    #         result = torch.cat(
-    #             [x_src[:num_vis], images[-1][:num_vis]], dim=1
-    #         ).reshape(-1, 1, 32, 32)
-    #         tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention.png", nrow=3)
+            num_vis = 4
+            result = torch.cat(
+                [x_src[:num_vis], images[-1][:num_vis]], dim=1
+            ).reshape(-1, 1, 32, 32)
+            tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention.png", nrow=100)
     
     print("Sampling completed and images saved.")   
     
