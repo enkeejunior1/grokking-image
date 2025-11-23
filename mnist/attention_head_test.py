@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torchvision.utils import make_grid
 from tqdm import tqdm
+from datetime import datetime
 
 
 class MNISTModularArithmeticDataset(Dataset):
@@ -141,8 +142,11 @@ if __name__ == "__main__":
         return parser.parse_args()
     args = parse_args()
     
+    now = datetime.datetime.now()
+    formatted_time = now.strftime("%m.%d.%H.%M")
+    
     pretrained_name = 'train_fraction_{}-num_images_{}'.format(args.train_fraction, args.num_images)
-    experiment_name = 'test_attention_head_{}'.format(pretrained_name)
+    experiment_name = 'test_attention_head_{}'.format(formatted_time)
     weights_dir = os.path.join(args.generative_model_path, pretrained_name)
     results_dir = os.path.join(args.output_dir, experiment_name)
     os.makedirs(weights_dir, exist_ok=True)
@@ -198,6 +202,6 @@ if __name__ == "__main__":
                 [x_src[:num_vis], images[-1][:num_vis]], dim=1
             ).reshape(-1, 1, 32, 32)
             tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention.png", nrow=3)
-        
     
+    print("Sampling completed and images saved.")   
     
