@@ -131,6 +131,8 @@ if __name__ == "__main__":
     from model import DiT_Llama
     from classifier import MNISTClassifier
     import argparse
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def parse_args():
         parser = argparse.ArgumentParser()
@@ -154,9 +156,9 @@ if __name__ == "__main__":
 
     model = DiT_Llama(
         3, 32, dim=256, n_layers=10, n_heads=8,
-    ).cuda()
+    ).to(device)
     
-    classifier = MNISTClassifier().cuda()
+    classifier = MNISTClassifier().to(device)
     classifier.load_state_dict(torch.load(args.classifier_weights_path))
 
     model_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -187,9 +189,9 @@ if __name__ == "__main__":
     print("Starting sampling {}".format(dl_all.__len__()))
     
     for i, (x_tgt, x_src, label_tgt) in enumerate(dl_all):
-        _, x_src, label_tgt = x_tgt.cuda(), x_src.cuda(), label_tgt.cuda()
+        _, x_src, label_tgt = x_tgt.to(device), x_src.to(device), label_tgt.to(device)
         batch_size_train = x_src.size(0)
-        x_tgt = torch.randn(batch_size_train, 1, 32, 32).cuda()
+        x_tgt = torch.randn(batch_size_train, 1, 32, 32).to(device)
         
         with torch.no_grad():
             images = rf.sample(x_tgt, x_src)
