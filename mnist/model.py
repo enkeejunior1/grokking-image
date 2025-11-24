@@ -73,12 +73,13 @@ class LabelEmbedder(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, n_heads):
+    def __init__(self, dim, n_heads, perturb=None):
         super().__init__()
 
         self.n_heads = n_heads
         self.n_rep = 1
         self.head_dim = dim // n_heads
+        self.perturb = perturb  # For the attention head testing purpose
 
         self.wq = nn.Linear(dim, n_heads * self.head_dim, bias=False)
         self.wk = nn.Linear(dim, self.n_heads * self.head_dim, bias=False)
@@ -125,14 +126,20 @@ class Attention(nn.Module):
         xq, xk = self.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
         xq, xk = xq.to(dtype), xk.to(dtype)
 
-        output = F.scaled_dot_product_attention(
-            xq.permute(0, 2, 1, 3),
-            xk.permute(0, 2, 1, 3),
-            xv.permute(0, 2, 1, 3),
-            dropout_p=0.0,
-            is_causal=False,
-        ).permute(0, 2, 1, 3)
-        output = output.flatten(-2)
+        # Perturbation for attention head testing
+        if self.perturb:
+            pass
+        
+        # Regular forward
+        else:
+            output = F.scaled_dot_product_attention(
+                xq.permute(0, 2, 1, 3),
+                xk.permute(0, 2, 1, 3),
+                xv.permute(0, 2, 1, 3),
+                dropout_p=0.0,
+                is_causal=False,
+            ).permute(0, 2, 1, 3)
+            output = output.flatten(-2)
 
         return self.wo(output)
 

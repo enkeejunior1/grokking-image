@@ -134,11 +134,11 @@ if __name__ == "__main__":
 
     def parse_args():
         parser = argparse.ArgumentParser()
-        parser.add_argument("--classifier_weights_path", type=str, default="weights/mnist_classifier_weights.pth")
-        parser.add_argument("--generative_model_path", type=str, default="weights/")
-        parser.add_argument("--train_fraction", type=float, default=0.7)
+        parser.add_argument("--classifier_weights_path", type=str, default="../weights/mnist_classifier_weights.pth")
+        parser.add_argument("--generative_model_path", type=str, default="../weights/")
+        parser.add_argument("--train_fraction", type=float, default=0.9)    # As sugested by Yonghyun
         parser.add_argument("--output_dir", type=str, default="results/")
-        parser.add_argument("--num_images", type=int, default=1)
+        parser.add_argument("--num_images", type=int, default=1)    # As sugested by Yonghyun
         return parser.parse_args()
     args = parse_args()
     
@@ -164,11 +164,6 @@ if __name__ == "__main__":
 
     rf = RF(model)
     optimizer = optim.Adam(model.parameters(), lr=5e-4)
-    
-    # ds_train = MNISTModularArithmeticDataset(p=10, split='train', train_fraction=args.train_fraction, num_images=args.num_images)
-    # ds_valid = MNISTModularArithmeticDataset(p=10, split='valid', train_fraction=args.train_fraction, num_images=args.num_images)
-    # dl_train = DataLoader(ds_train, batch_size=256, shuffle=True, drop_last=False)
-    # dl_valid = DataLoader(ds_valid, batch_size=256, shuffle=False, drop_last=False)
     
     ds_all = MNISTModularArithmeticDataset(p=10, split='all', train_fraction=args.train_fraction, num_images=args.num_images)
     dl_all = DataLoader(ds_all, batch_size=256, shuffle=False, drop_last=False)
@@ -199,11 +194,11 @@ if __name__ == "__main__":
         with torch.no_grad():
             images = rf.sample(x_tgt, x_src)
 
-            num_vis = 4
+            num_vis = 10
             result = torch.cat(
                 [x_src[:num_vis], images[-1][:num_vis]], dim=1
             ).reshape(-1, 1, 32, 32)
-            tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention.png", nrow=100)
+            tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention.png", nrow=3)
     
     print("Sampling completed and images saved.")   
     
