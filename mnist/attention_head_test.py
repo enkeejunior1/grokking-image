@@ -122,9 +122,10 @@ if __name__ == "__main__":
     os.makedirs(weights_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
 
+    n_layers = 10
     n_heads = 8
     model = DiT_Llama(
-        3, 32, dim=256, n_layers=10, n_heads=n_heads,
+        3, 32, dim=256, n_layers=n_layers, n_heads=n_heads,
     ).to(device)
     
     # Load the pre-trained classifier weights
@@ -171,7 +172,7 @@ if __name__ == "__main__":
             max_accuracy = -1
             max_confidence = -1
             
-            for _trial in range(10):  # Run multiple trials to find the least influential head
+            for _trial in range(n_layers * n_heads):  # Run multiple trials to find the least influential head
                 least_influential_head, max_accuracy, max_confidence = head_level_perturbation_test(rf, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
                 print(f"Trial {_trial+1}/10: Least influential head so far: ({least_influential_head[0]}, {least_influential_head[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
                 rf.add_deactivated_head(*least_influential_head)
