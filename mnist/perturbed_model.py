@@ -76,6 +76,23 @@ class MNISTModularArithmeticDataset(Dataset):
 from train import RF
 
 class PerturbedRF(RF):    
+    def __init__(self, model, ln=True):
+        super().__init__(model, ln=True)
+        self.deactivated_heads = set()
+        self.head_handlers = dict()
+    
+    def add_deactivated_head(self, layer_id, head_id):
+        if (layer_id, head_id) in self.deactivated_heads:
+            print(f"Head {head_id} in layer {layer_id} is already deactivated.")
+            return
+        
+        curr_hook = make_head_level_attention_hook(layer_id, head_id, zero_out=False)
+        curr_layer = self.model.layers[layer_id]
+        handler = curr_layer.attention.register_forward_hook(curr_hook)
+        
+        self.deactivated_heads.add((layer_id, head_id))
+        self.head_handlers[(layer_id, head_id)] = handler
+        
     @torch.no_grad()
     def perturbed_sample_layer_level(self, z, cond, sample_steps=1): # T=1
         b = z.size(0)
@@ -119,6 +136,11 @@ class PerturbedRF(RF):
         handler = None
         for l, layer in enumerate(self.model.layers):            
             for h in range(n_heads):
+                # Pass if this head is already deactivated
+                if (l, h) in self.deactivated_heads:
+                    print(f"Skipping deactivated head {h} in layer {l}.")
+                    continue
+                
                 # Remove the previously registered handler
                 if handler is not None:
                     handler.remove()

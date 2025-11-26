@@ -54,6 +54,10 @@ def layer_level_perturbation_test(rf, x_gen, x_src, sample_steps, save_image=Fal
 def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_image=False):
     images_by_perturbed_heads = rf.perturbed_sample_head_level(x_gen, x_src, n_heads=n_heads, sample_steps=sample_steps)
     
+    least_influential_head= None
+    max_accuracy = -1
+    max_confidence = -1
+    
     for l, layer in enumerate(images_by_perturbed_heads):
         print(f"Processing layer {l+1}/{len(images_by_perturbed_heads)}")
         
@@ -72,6 +76,13 @@ def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_i
             accuracy = 1 - failed_mask.float().mean().item()
             
             print(f" (accuracy {accuracy:.2f})")
+            
+            if least_influential_head is None or \
+                accuracy > max_accuracy or \
+                    (accuracy == max_accuracy and mean_confidence > max_confidence):
+                least_influential_head = (l, h)
+                max_accuracy = accuracy
+                max_confidence = mean_confidence
 
             if save_image:
                 num_vis = 100
@@ -79,6 +90,8 @@ def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_i
                     [x_src[:num_vis], final_image[:num_vis]], dim=1
                 ).reshape(-1, 1, 32, 32)
                 tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention_head_layer_{l+1}_head_{h+1}_perturb (accuracy {accuracy:.2f}).png", nrow=3) 
+    
+    return least_influential_head, max_accuracy, max_confidence
     
 
 if __name__ == "__main__":    
@@ -103,13 +116,14 @@ if __name__ == "__main__":
     weights_dir = os.path.join(args.generative_model_path, pretrained_name)
     results_dir = os.path.join(args.output_dir, experiment_name)
     os.makedirs(weights_dir, exist_ok=True)
-    # os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
 
     n_heads = 8
     model = DiT_Llama(
         3, 32, dim=256, n_layers=10, n_heads=n_heads,
     ).to(device)
     
+    # Load the pre-trained classifier weights
     classifier = MNISTClassifier().to(device)
     weights = torch.load(args.classifier_weights_path, map_location=device) # For cpu compatibility
     classifier.load_state_dict(weights)
@@ -125,9 +139,10 @@ if __name__ == "__main__":
 
     tol = 0
         
-    # Load a pre-trained checkpoint
+    # Load a pre-trained generative model
     epoch_to_load = 29700
     checkpoint_path = os.path.join(weights_dir, f"model_epoch_{epoch_to_load}.pth")
+    print(f"Loading model from {checkpoint_path}")
     
     if not checkpoint_path:
         raise ValueError(f"Checkpoint path {checkpoint_path} does not exist.")
@@ -148,4 +163,11 @@ if __name__ == "__main__":
             # layer_level_perturbation_test(rf, x_gen, x_src, sample_steps=1, save_image=True) # T=1
             
             # Head-level perturbation
-            head_level_perturbation_test(rf, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
+            least_influential_head= None
+            max_accuracy = -1
+            max_confidence = -1
+            
+            for _trial in range(10):  # Run multiple trials to find the least influential head
+                least_influential_head, max_accuracy, max_confidence = head_level_perturbation_test(rf, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
+                print(f"Trial {_trial+1}/10: Least influential head so far: ({least_influential_head[0]}, {least_influential_head[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
+                rf.add_deactivated_head(*least_influential_head)
