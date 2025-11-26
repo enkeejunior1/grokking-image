@@ -63,6 +63,10 @@ def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_i
         
         for h, final_image in enumerate(layer):
             print(f"  Processing head {h+1}/{n_heads}", end="")
+            if (l, h) in rf.deactivated_heads:
+                print(" (already deactivated, skipping)")
+                continue
+            
             classifier_outputs = classifier(final_image)            
             max_prob, max_idx = torch.max(F.softmax(classifier_outputs, dim=1), dim=1)
             mean_confidence = max_prob.mean().item()
