@@ -73,13 +73,12 @@ class LabelEmbedder(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, n_heads, perturb=None):
+    def __init__(self, dim, n_heads):
         super().__init__()
 
         self.n_heads = n_heads
         self.n_rep = 1
         self.head_dim = dim // n_heads
-        self.perturb = perturb  # For the attention head testing purpose
 
         self.wq = nn.Linear(dim, n_heads * self.head_dim, bias=False)
         self.wk = nn.Linear(dim, self.n_heads * self.head_dim, bias=False)
@@ -126,23 +125,17 @@ class Attention(nn.Module):
         xq, xk = self.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
         xq, xk = xq.to(dtype), xk.to(dtype)
 
-        # Perturbation for attention head testing
-        if self.perturb:
-            pass
-        
-        # Regular forward
-        else:
-            output = F.scaled_dot_product_attention(
-                xq.permute(0, 2, 1, 3),
-                xk.permute(0, 2, 1, 3),
-                xv.permute(0, 2, 1, 3),
-                dropout_p=0.0,
-                is_causal=False,
-            ).permute(0, 2, 1, 3)
-            output = output.flatten(-2)
+        output = F.scaled_dot_product_attention(
+            xq.permute(0, 2, 1, 3),
+            xk.permute(0, 2, 1, 3),
+            xv.permute(0, 2, 1, 3),
+            dropout_p=0.0,
+            is_causal=False,
+        ).permute(0, 2, 1, 3)
+        output = output.flatten(-2)
 
         return self.wo(output)
-
+    
 
 class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, multiple_of, ffn_dim_multiplier=None):
@@ -209,6 +202,7 @@ class TransformerBlock(nn.Module):
             x = x + self.feed_forward(self.ffn_norm(x))
 
         return x
+    
 
 
 class FinalLayer(nn.Module):
