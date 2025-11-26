@@ -56,6 +56,7 @@ def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_i
     
     for l, layer in enumerate(images_by_perturbed_heads):
         print(f"Processing layer {l+1}/{len(images_by_perturbed_heads)}")
+        
         for h, final_image in enumerate(layer):
             print(f"  Processing head {h+1}/{n_heads}", end="")
             classifier_outputs = classifier(final_image)            
