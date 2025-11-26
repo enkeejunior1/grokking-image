@@ -138,7 +138,7 @@ class PerturbedRF(RF):
             for h in range(n_heads):
                 # Pass if this head is already deactivated
                 if (l, h) in self.deactivated_heads:
-                    print(f"Skipping deactivated head {h} in layer {l}.")
+                    # print(f"Skipping deactivated head ({l},{h}).")
                     continue
                 
                 # Remove the previously registered handler
