@@ -5,6 +5,10 @@ import torchvision
 import torchvision.transforms as transforms
 import numpy as np
 
+import pydot
+import colorsys
+import os
+
 class MNISTModularArithmeticDataset(Dataset):
     def __init__(self, p=9, split='train', train_fraction=0.3, num_images=None):
         """
@@ -227,3 +231,104 @@ def make_head_level_attention_hook(layer_id, head_id, zero_out=False):
         return module.wo(output)
 
     return attention_hook_head_level
+
+def generate_rainbow_hex_colors(N):
+    """
+    N개의 레이어에 고르게 분포된 무지개색 HEX 코드 리스트를 생성합니다.
+    """
+    hex_colors = []
+    MAX_HUE = 0.85 
+    
+    for i in range(N):
+        if N == 1:
+            hue_fraction = 0.0
+        else:
+            hue_fraction = i / (N - 1) * MAX_HUE
+        
+        rgb_float = colorsys.hsv_to_rgb(hue_fraction, 1.0, 1.0)
+        
+        r = int(rgb_float[0] * 255)
+        g = int(rgb_float[1] * 255)
+        b = int(rgb_float[2] * 255)
+        
+        hex_code = f"#{r:02x}{g:02x}{b:02x}".upper()
+        hex_colors.append(hex_code)
+        
+    return hex_colors
+
+
+def draw_network(n_layers, n_heads, deactivated_heads, results_dir):
+    graph_attn = pydot.Dot("transformer_flow", graph_type="digraph", rankdir="LR", splines="line") 
+    layer_colors = generate_rainbow_hex_colors(n_layers)
+    rad = "0.2"
+    for l in range(n_layers):
+        curr_cluster = pydot.Cluster(f"cluster_L{l+1}", label=f"Layer {l+1}", color="lightgrey", style="filled", fillcolor="#F9F9F9")
+        
+        for h in range(n_heads):
+            if (l, h) in deactivated_heads:
+                head_node = pydot.Node(f"L{l+1}_H{h+1}", label="", width=rad, height=rad, fixed_size="true", shape="circle", style="filled", fillcolor="grey", penwidth="0")
+            else:
+                head_node = pydot.Node(f"L{l+1}_H{h+1}", label="", width=rad, height=rad, fixed_size="true", shape="circle", style="filled", fillcolor=layer_colors[l], penwidth="0")
+            curr_cluster.add_node(head_node)
+        
+        graph_attn.add_subgraph(curr_cluster)
+        
+        if l > 0:
+            for h_prev in range(n_heads):
+                for h_curr in range(n_heads):
+                    if (l-1, h_prev) not in deactivated_heads and (l, h_curr) not in deactivated_heads:
+                        edge = pydot.Edge(f"L{l}_H{h_prev+1}", f"L{l+1}_H{h_curr+1}", style="solid", color="black", arrowhead="normal", arrowsize="0.2")
+                        graph_attn.add_edge(edge)
+    
+    graph_attn.write_png(f"{results_dir}/transformer_structure.png")
+    # print("Graph structure with clusters defined.")
+    
+
+from PIL import Image
+
+def stack_images_vertically(image_paths, output_path, trial_num, alignment='center'):
+    """
+    여러 이미지 파일을 불러와 수직으로 병합하고, 너비를 가장 넓은 이미지에 맞춥니다.
+    
+    Args:
+        image_paths (list): 이미지 파일 경로 리스트
+        alignment (str): 'left', 'center', 'right' 중 하나로 수평 정렬 지정
+        
+    Returns:
+        Image: 병합된 단일 Image 객체
+    """
+    if not image_paths:
+        return None
+
+    # 1. 모든 이미지 로드 및 치수 계산
+    images = [Image.open(path).convert("RGB") for path in image_paths]
+    
+    # 최대 너비와 총 높이 계산
+    max_width = max(img.width for img in images)
+    total_height = sum(img.height for img in images)
+    
+    # 2. 새로운 캔버스 생성 (흰색 배경)
+    # RGB 모드, 최대 너비, 총 높이
+    stacked_image = Image.new('RGB', (max_width, total_height), color='white')
+    
+    # 3. 이미지 순서대로 붙여넣기
+    y_offset = 0
+    for img in images:
+        
+        # 수평 정렬에 따른 x 좌표 계산
+        if alignment == 'center':
+            x_offset = (max_width - img.width) // 2
+        elif alignment == 'right':
+            x_offset = max_width - img.width
+        else: # 'left' 또는 기본값
+            x_offset = 0
+            
+        stacked_image.paste(img, (x_offset, y_offset))
+        y_offset += img.height # 다음 이미지를 위해 높이 업데이트
+    
+    image_name = f"stacked_result_trial_{trial_num}.png"
+    full_path = os.path.join(output_path, image_name)
+    try:
+        stacked_image.save(full_path)
+    except Exception as e:
+        print(f"이미지 저장 오류 발생: {e}")

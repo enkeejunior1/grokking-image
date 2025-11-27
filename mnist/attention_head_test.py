@@ -21,13 +21,12 @@ from torchvision.utils import make_grid
 from tqdm import tqdm
 from datetime import datetime
 
-from perturbed_model import MNISTModularArithmeticDataset, PerturbedRF
+from perturbed_model import MNISTModularArithmeticDataset, PerturbedRF, draw_network, stack_images_vertically
 from model import DiT_Llama
 from classifier import MNISTClassifier
 import argparse
 
-
-def layer_level_perturbation_test(rf, x_gen, x_src, sample_steps, save_image=False):
+def layer_level_perturbation_test(rf, classifier, x_gen, x_src, sample_steps, save_image=False):
     images_by_perturbed_layers = rf.perturbed_sample_layer_level(x_gen, x_src, sample_steps)
     
     for l, images in enumerate(images_by_perturbed_layers):
@@ -46,28 +45,29 @@ def layer_level_perturbation_test(rf, x_gen, x_src, sample_steps, save_image=Fal
             result = torch.cat(
                 [x_src[:num_vis], final_image[:num_vis]], dim=1
             ).reshape(-1, 1, 32, 32)
-            tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention_layer_{l+1}_perturb (accuracy {accuracy:.2f}).png", nrow=3)
+            tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention_layer_{l+1}_perturb (accuracy {accuracy:.2f}).png", nrow=30)
     
     print(f"Sampling completed for batch {i+1}/{dl_all.__len__()}")  
 
 
-def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_image=False):
+def head_level_perturbation_test(rf, classifier, x_gen, x_src, n_heads, sample_steps, save_image=False):
     images_by_perturbed_heads = rf.perturbed_sample_head_level(x_gen, x_src, n_heads=n_heads, sample_steps=sample_steps)
     
     least_influential_head= None
     max_accuracy = -1
     max_confidence = -1
+    final_image = None
     
     for l, layer in enumerate(images_by_perturbed_heads):
         print(f"Processing layer {l+1}/{len(images_by_perturbed_heads)}")
         
-        for h, final_image in enumerate(layer):
+        for h, curr_image in enumerate(layer):
             print(f"  Processing head {h+1}/{n_heads}", end="")
             if (l, h) in rf.deactivated_heads:
                 print(" (already deactivated, skipping)")
                 continue
             
-            classifier_outputs = classifier(final_image)            
+            classifier_outputs = classifier(curr_image)            
             max_prob, max_idx = torch.max(F.softmax(classifier_outputs, dim=1), dim=1)
             mean_confidence = max_prob.mean().item()
             print(f" (softmax output: {mean_confidence:.2f})", end="")   
@@ -75,8 +75,8 @@ def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_i
             classifier_predictions = torch.argmax(classifier_outputs, dim=1)
             failed_mask = (label_tgt != classifier_predictions)    
         
-            # final_image = 1 - torch.relu(final_image)  # Check inverting MNIST
-            final_image[failed_mask] = 1 - torch.relu(final_image[failed_mask])  # Reverse the failed cases
+            # curr_image = 1 - torch.relu(curr_image)  # Check inverting MNIST
+            curr_image[failed_mask] = 1 - torch.relu(curr_image[failed_mask])  # Reverse the failed cases
             accuracy = 1 - failed_mask.float().mean().item()
             
             print(f" (accuracy {accuracy:.2f})")
@@ -87,16 +87,17 @@ def head_level_perturbation_test(rf, x_gen, x_src, n_heads, sample_steps, save_i
                 least_influential_head = (l, h)
                 max_accuracy = accuracy
                 max_confidence = mean_confidence
+                final_image = curr_image
 
             if save_image:
                 num_vis = 100
                 result = torch.cat(
                     [x_src[:num_vis], final_image[:num_vis]], dim=1
                 ).reshape(-1, 1, 32, 32)
-                tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention_head_layer_{l+1}_head_{h+1}_perturb (accuracy {accuracy:.2f}).png", nrow=3) 
+                tvu.save_image(result, f"{results_dir}/sample_{i+1}_attention_head_layer_{l+1}_head_{h+1}_perturb (accuracy {accuracy:.2f}).png", nrow=30) 
     
-    return least_influential_head, max_accuracy, max_confidence
-    
+    return least_influential_head, max_accuracy, max_confidence, final_image
+
 
 if __name__ == "__main__":    
     
@@ -165,19 +166,33 @@ if __name__ == "__main__":
         
         with torch.no_grad():
             # # Layer-level perturbation
-            # layer_level_perturbation_test(rf, x_gen, x_src, sample_steps=1, save_image=True) # T=1
+            # layer_level_perturbation_test(rf, classifier, x_gen, x_src, sample_steps=1, save_image=True) # T=1
             
-            # Head-level perturbation
-            least_influential_head= None
-            max_accuracy = -1
-            max_confidence = -1
-            
-            for _trial in range(n_layers * n_heads):  # Run multiple trials to find the least influential head
-                least_influential_head, max_accuracy, max_confidence = head_level_perturbation_test(rf, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
-                print(f"Trial {_trial+1}/10: Least influential head so far: ({least_influential_head[0]}, {least_influential_head[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
-                if max_accuracy < 0.8:
+            # Head-level perturbation            
+            num_trials = n_layers * n_heads
+            for _trial in range(1):  # Run multiple trials to find the least influential head
+                head_off, max_accuracy, max_confidence, final_image = head_level_perturbation_test(
+                    rf, classifier, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
+                print(f"Trial {_trial+1}/{num_trials}: Least influential head so far: ({head_off[0]}, {head_off[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
+                
+                # Deactivate the least influential head found in this trial
+                rf.add_deactivated_head(*head_off)
+                
+                # Generated Images
+                curr_dir = os.path.join(results_dir, f"temp_{_trial+1}")
+                os.makedirs(curr_dir, exist_ok=True)
+                num_vis = 100
+                result = torch.cat(
+                    [x_src[:num_vis], final_image[:num_vis]], dim=1
+                ).reshape(-1, 1, 32, 32)
+                tvu.save_image(result, f"{curr_dir}/generation_result.png", nrow=30) 
+
+                # Draw Network Structure
+                draw_network(n_layers, n_heads, rf.deactivated_heads, curr_dir)
+                
+                stack_images_vertically(curr_dir, results_dir, _trial+1)
+                
+                if max_accuracy < 1.0:
                     break
-                rf.add_deactivated_head(*least_influential_head)
-            
-            # # Save Images for the least influential head
-            # head_level_perturbation_test(rf, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=True)
+                
+        print(f"Sampling completed for batch {i+1}/{dl_all.__len__()}")
