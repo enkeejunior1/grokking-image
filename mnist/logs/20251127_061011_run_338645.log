@@ -1,0 +1,21 @@
+===================================
+min_mdlm run
+Thu Nov 27 06:10:11 UTC 2025
+Job running on node: jg-b6000-0.grasp.maas
+===================================
+Attempting to activate venv
+[DEBUG] Python check:
+Python 3.12.3
+===================================
+Running attention_head_test.py starts
+Thu Nov 27 06:10:11 UTC 2025
+===================================
+Fin.
+Thu Nov 27 06:10:14 UTC 2025
+in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/hozy/research/gen_ai/grokking-image/mnist/attention_head_test.py", line 24, in <module>
+    from perturbed_model import MNISTModularArithmeticDataset, PerturbedRF, draw_network, stack_images_vertically
+  File "/home/hozy/research/gen_ai/grokking-image/mnist/perturbed_model.py", line 8, in <module>
+    import pydot
+ModuleNotFoundError: No module named 'pydot'

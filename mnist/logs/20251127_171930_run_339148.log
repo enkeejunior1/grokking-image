@@ -1,0 +1,21 @@
+===================================
+min_mdlm run
+Thu Nov 27 17:19:30 UTC 2025
+Job running on node: jg-b6000-0.grasp.maas
+===================================
+Attempting to activate venv
+[DEBUG] Python check:
+Python 3.12.3
+===================================
+Running attention_head_test.py starts
+Thu Nov 27 17:19:30 UTC 2025
+===================================
+Fin.
+Thu Nov 27 17:19:32 UTC 2025
+assifier_weights_path CLASSIFIER_WEIGHTS_PATH]
+                              [--generative_model_path GENERATIVE_MODEL_PATH]
+                              [--train_fraction TRAIN_FRACTION]
+                              [--output_dir OUTPUT_DIR]
+                              [--num_images NUM_IMAGES] [--zero-out]
+                              [--stack-images]
+attention_head_test.py: error: unrecognized arguments: --zero_out
