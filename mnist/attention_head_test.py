@@ -50,8 +50,8 @@ def layer_level_perturbation_test(rf, classifier, x_gen, x_src, sample_steps, sa
     print(f"Sampling completed for batch {i+1}/{dl_all.__len__()}")  
 
 
-def head_level_perturbation_test(rf, classifier, x_gen, x_src, n_heads, sample_steps, save_image=False):
-    images_by_perturbed_heads = rf.perturbed_sample_head_level(x_gen, x_src, n_heads=n_heads, sample_steps=sample_steps)
+def head_level_perturbation_test(rf, classifier, x_gen, x_src, n_heads, sample_steps, zero_out=False, save_image=False):
+    images_by_perturbed_heads = rf.perturbed_sample_head_level(x_gen, x_src, n_heads=n_heads, zero_out=zero_out, sample_steps=sample_steps)
     
     least_influential_head= None
     max_accuracy = -1
@@ -110,6 +110,8 @@ if __name__ == "__main__":
         parser.add_argument("--train_fraction", type=float, default=0.9)    # As sugested by Yonghyun
         parser.add_argument("--output_dir", type=str, default="results/")
         parser.add_argument("--num_images", type=int, default=1)    # As sugested by Yonghyun
+        parser.add_argument("--zero_out", type=bool, default=False) # Whether to zero out the deactivated heads or just fade them
+        parser.add_argument("--stack_images", type=bool, default=True) # Whether to stack images vertically
         return parser.parse_args()
     args = parse_args()
     
@@ -122,6 +124,9 @@ if __name__ == "__main__":
     results_dir = os.path.join(args.output_dir, experiment_name)
     os.makedirs(weights_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
+    
+    zero_out = args.zero_out
+    stack_images = args.stack_images
 
     n_layers = 10
     n_heads = 8
@@ -170,9 +175,9 @@ if __name__ == "__main__":
             
             # Head-level perturbation            
             num_trials = n_layers * n_heads
-            for _trial in range(1):  # Run multiple trials to find the least influential head
+            for _trial in range(num_trials):  # Run multiple trials to find the least influential head
                 head_off, max_accuracy, max_confidence, final_image = head_level_perturbation_test(
-                    rf, classifier, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
+                    rf, classifier, x_gen, x_src, n_heads=n_heads, zero_out=zero_out, sample_steps=1, save_image=False) # T=1
                 print(f"Trial {_trial+1}/{num_trials}: Least influential head so far: ({head_off[0]}, {head_off[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
                 
                 # Deactivate the least influential head found in this trial
@@ -188,11 +193,13 @@ if __name__ == "__main__":
                 tvu.save_image(result, f"{curr_dir}/generation_result.png", nrow=30) 
 
                 # Draw Network Structure
-                draw_network(n_layers, n_heads, rf.deactivated_heads, curr_dir)
+                stats = (max_accuracy, max_confidence)
+                draw_network(n_layers, n_heads, rf.deactivated_heads, curr_dir, zero_out, stats, stack_images)
                 
-                stack_images_vertically(curr_dir, results_dir, _trial+1)
+                if stack_images:
+                    stack_images_vertically(curr_dir, results_dir, _trial+1)
                 
-                if max_accuracy < 1.0:
-                    break
+                # if max_accuracy < 0.8:
+                #     break
                 
         print(f"Sampling completed for batch {i+1}/{dl_all.__len__()}")

@@ -131,7 +131,7 @@ class PerturbedRF(RF):
         return perturbed_images
     
     @torch.no_grad()
-    def perturbed_sample_head_level(self, z, cond, n_heads, sample_steps=1): # T=1
+    def perturbed_sample_head_level(self, z, cond, n_heads, zero_out=False, sample_steps=1): # T=1
         b = z.size(0)
         dt = 1.0 / sample_steps
         dt = torch.tensor([dt] * b).to(z.device).view([b, *([1] * len(z.shape[1:]))])
@@ -257,8 +257,13 @@ def generate_rainbow_hex_colors(N):
     return hex_colors
 
 
-def draw_network(n_layers, n_heads, deactivated_heads, results_dir):
-    graph_attn = pydot.Dot("transformer_flow", graph_type="digraph", rankdir="LR", splines="line") 
+def draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=False, stats=None, save_png=True):
+    if stats is not None:
+        label = f"Accuracy: {stats[0]:.3f}, Avg. Confidence: {stats[1]:.3f}"
+    else:
+        label = "Transformer Structure"
+    
+    graph_attn = pydot.Dot("transformer_flow", graph_type="digraph", rankdir="LR", splines="line", label=label) 
     layer_colors = generate_rainbow_hex_colors(n_layers)
     rad = "0.2"
     for l in range(n_layers):
@@ -278,15 +283,23 @@ def draw_network(n_layers, n_heads, deactivated_heads, results_dir):
                 for h_curr in range(n_heads):
                     if (l-1, h_prev) not in deactivated_heads and (l, h_curr) not in deactivated_heads:
                         edge = pydot.Edge(f"L{l}_H{h_prev+1}", f"L{l+1}_H{h_curr+1}", style="solid", color="black", arrowhead="normal", arrowsize="0.2")
-                        graph_attn.add_edge(edge)
+                    else:
+                        if zero_out:
+                            edge = pydot.Edge(f"L{l}_H{h_prev+1}", f"L{l+1}_H{h_curr+1}", style="solid", color="#00000000", arrowhead="normal", arrowsize="0.2")
+                        else:
+                            edge = pydot.Edge(f"L{l}_H{h_prev+1}", f"L{l+1}_H{h_curr+1}", style="solid", color="#80808033", arrowhead="normal", arrowsize="0.2")
+                    graph_attn.add_edge(edge)
     
-    graph_attn.write_png(f"{results_dir}/transformer_structure.png")
+    if save_png:
+        graph_attn.write_png(f"{results_dir}/transformer_structure.png")
+    else:
+        graph_attn.write(f"transformer_structure.dot")
     # print("Graph structure with clusters defined.")
     
 
 from PIL import Image
 
-def stack_images_vertically(image_paths, output_path, trial_num, alignment='center'):
+def stack_images_vertically(image_path, output_path, trial_num, alignment='center'):
     """
     여러 이미지 파일을 불러와 수직으로 병합하고, 너비를 가장 넓은 이미지에 맞춥니다.
     
@@ -297,6 +310,13 @@ def stack_images_vertically(image_paths, output_path, trial_num, alignment='cent
     Returns:
         Image: 병합된 단일 Image 객체
     """
+    all_files = os.listdir(image_path)
+    image_paths = []
+    for file_name in all_files:
+        if file_name.endswith(".png"):
+            full_path = os.path.join(image_path, file_name)
+            image_paths.append(full_path)
+    
     if not image_paths:
         return None
 
