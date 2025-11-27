@@ -257,7 +257,7 @@ def generate_rainbow_hex_colors(N):
     return hex_colors
 
 
-def draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=False, stats=None, save_png=True):
+def draw_network(n_layers, n_heads, trial_num, deactivated_heads, results_dir, zero_out=False, stats=None, save_png=True):
     if stats is not None:
         label = f"Accuracy: {stats[0]:.3f}, Avg. Confidence: {stats[1]:.3f}"
     else:
@@ -291,9 +291,9 @@ def draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=Fal
                     graph_attn.add_edge(edge)
     
     if save_png:
-        graph_attn.write_png(f"{results_dir}/transformer_structure.png")
+        graph_attn.write_png(f"{results_dir}/transformer_structure_{trial_num:02d}.png")
     else:
-        graph_attn.write(f"transformer_structure.dot")
+        graph_attn.write(f"{results_dir}/transformer_structure_{trial_num:02d}.dot")
     # print("Graph structure with clusters defined.")
     
 

@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
                 # Draw Network Structure
                 stats = (max_accuracy, max_confidence)
-                draw_network(n_layers, n_heads, rf.deactivated_heads, curr_dir, zero_out, stats, stack_images)
+                draw_network(n_layers, n_heads, _trial+1, rf.deactivated_heads, curr_dir, zero_out, stats, stack_images)
                 
                 if stack_images:
                     stack_images_vertically(curr_dir, results_dir, _trial+1)
