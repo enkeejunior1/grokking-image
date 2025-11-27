@@ -97,8 +97,8 @@ def modify_dots(result_path, num_trials=80):
     import os
     
     for trial_num in range(1, 1+num_trials):        
-        # dir_name = f"temp_{trial_num:02d}"       
-        dir_name = f"temp_{trial_num}"
+        dir_name = f"temp_{trial_num:02d}"       
+        # dir_name = f"temp_{trial_num}"
         current_subdir_path = os.path.join(result_path, dir_name)
         if os.path.isdir(current_subdir_path):
             for file_name in os.listdir(current_subdir_path):
@@ -121,6 +121,6 @@ if __name__ == "__main__":
     # draw_network_test()
     
     result_path = "results/"
-    result_path += "test_attention_head_11.27.18.15/"
+    result_path += "test_attention_head_11-27-18-41_zero_out/"
     
     modify_dots(result_path, num_trials=n_layers*n_heads)

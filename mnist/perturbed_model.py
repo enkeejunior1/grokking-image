@@ -80,22 +80,35 @@ class MNISTModularArithmeticDataset(Dataset):
 from train import RF
 
 class PerturbedRF(RF):    
-    def __init__(self, model, ln=True):
+    def __init__(self, model, ln=True, zero_out=False):
         super().__init__(model, ln=True)
         self.deactivated_heads = set()
-        self.head_handlers = dict()
+        self.hook_handlers = dict()
+        self.zero_out = zero_out
+        
+        # Initialize all layer-level hooks
+        self.initialize_layer_level_hooks()
+    
+    def initialize_layer_level_hooks(self):
+        for l, layer in enumerate(self.model.layers):
+            curr_hook = make_head_level_attention_hook(l, self.deactivated_heads, zero_out=False)
+            handler = layer.attention.register_forward_hook(curr_hook)
+            self.hook_handlers[l] = handler
     
     def add_deactivated_head(self, layer_id, head_id):
         if (layer_id, head_id) in self.deactivated_heads:
             print(f"Head {head_id} in layer {layer_id} is already deactivated.")
             return
         
-        curr_hook = make_head_level_attention_hook(layer_id, head_id, zero_out=False)
-        curr_layer = self.model.layers[layer_id]
-        handler = curr_layer.attention.register_forward_hook(curr_hook)
-        
         self.deactivated_heads.add((layer_id, head_id))
-        self.head_handlers[(layer_id, head_id)] = handler
+    
+    def remove_deactivated_head(self, layer_id, head_id):
+        if (layer_id, head_id) in self.deactivated_heads:
+            print(f"Head {head_id} in layer {layer_id} is NOT deactivated.")
+            return
+        
+        self.deactivated_heads.remove((layer_id, head_id))
+        
         
     @torch.no_grad()
     def perturbed_sample_layer_level(self, z, cond, sample_steps=1): # T=1
@@ -137,7 +150,6 @@ class PerturbedRF(RF):
         dt = torch.tensor([dt] * b).to(z.device).view([b, *([1] * len(z.shape[1:]))])
         perturbed_images = [[None for _ in range(n_heads)] for _ in range(len(self.model.layers))]
         
-        handler = None
         for l, layer in enumerate(self.model.layers):            
             for h in range(n_heads):
                 # Pass if this head is already deactivated
@@ -145,15 +157,8 @@ class PerturbedRF(RF):
                     # print(f"Skipping deactivated head ({l},{h}).")
                     continue
                 
-                # Remove the previously registered handler
-                if handler is not None:
-                    handler.remove()
-                    
-                # Create hook
-                curr_hook = make_head_level_attention_hook(l, h, zero_out)
-                
-                # Register a new handler for the current head
-                handler = layer.attention.register_forward_hook(curr_hook)
+                # Temporarily deactivate the head
+                self.add_deactivated_head(l, h)
                 
                 # Create a copy of the input for perturbation
                 z_copy = torch.clone(z)
@@ -170,6 +175,9 @@ class PerturbedRF(RF):
                     # Append all the images for now
                     perturbed_images[l][h] = z_copy
                 
+                # Reactivate the head
+                self.remove_deactivated_head(l, h)
+                
         return perturbed_images
 
 
@@ -185,7 +193,7 @@ def attention_hook_layer_level(module, input, output):
     return module.wo(xv)
 
 
-def make_head_level_attention_hook(layer_id, head_id, zero_out=False):
+def make_head_level_attention_hook(layer_id, deactivated_set, zero_out=False):
     def attention_hook_head_level(module, input, output):
         '''
             Head level perturbation
@@ -210,7 +218,7 @@ def make_head_level_attention_hook(layer_id, head_id, zero_out=False):
         xq, xk = module.apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
         xq, xk = xq.to(dtype), xk.to(dtype)
 
-        output = F.scaled_dot_product_attention(
+        new_output = F.scaled_dot_product_attention(
             xq.permute(0, 2, 1, 3),
             xk.permute(0, 2, 1, 3),
             xv.permute(0, 2, 1, 3),
@@ -219,16 +227,18 @@ def make_head_level_attention_hook(layer_id, head_id, zero_out=False):
         ).permute(0, 2, 1, 3)
         
         # Turn off the target head
-        if zero_out:
-            # Option 1: Zero out the output of the head
-            output[:, :, head_id, :] = 0.0
-        else:        
-            # Option 2: Replace the output of the head with v of the head
-            output[:, :, head_id, :] = xv[:, :, head_id, :]
+        for (l, h) in deactivated_set:
+            if l == layer_id:        
+                if zero_out:
+                    # Option 1: Zero out the output of the head
+                    new_output[:, :, h, :] = 0.0
+                else:        
+                    # Option 2: Replace the output of the head with v of the head
+                    new_output[:, :, h, :] = xv[:, :, h, :]
         
-        output = output.flatten(-2)
+        new_output = new_output.flatten(-2)
 
-        return module.wo(output)
+        return module.wo(new_output)
 
     return attention_hook_head_level
 
