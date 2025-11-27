@@ -180,7 +180,7 @@ if __name__ == "__main__":
             
             # Head-level perturbation            
             num_trials = n_layers * n_heads
-            for _trial in range(1):  # Run multiple trials to find the least influential head
+            for _trial in range(num_trials):  # Run multiple trials to find the least influential head
                 head_off, max_accuracy, max_confidence, final_image = head_level_perturbation_test(
                     rf, classifier, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
                 print(f"Trial {_trial+1}/{num_trials}: Least influential head so far: ({head_off[0]}, {head_off[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
@@ -191,13 +191,14 @@ if __name__ == "__main__":
                 # Generated Images
                 curr_dir = os.path.join(results_dir, f"temp_{(_trial+1):02d}")
                 os.makedirs(curr_dir, exist_ok=True)
+                final_image = torch.clamp(final_image, min=-1.0, max=1.0)
                 num_vis = 100
                 result = torch.cat(
                     [x_src[:num_vis], final_image[:num_vis]], dim=1
                 ).reshape(-1, 1, 32, 32)
                 
                 # tvu.save_image(result, f"{curr_dir}/generagittion_result.png", nrow=30)
-                draw_partitioned_predictions(result, curr_dir) 
+                draw_partitioned_predictions(result, curr_dir, device) 
 
                 # Draw Network Structure
                 stats = (max_accuracy, max_confidence)

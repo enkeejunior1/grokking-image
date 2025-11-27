@@ -374,18 +374,18 @@ from torchvision.utils import make_grid
 import torchvision.transforms.functional as TF
 from PIL import ImageDraw
 
-def draw_partitioned_predictions(combined_images_tensor, curr_dir):
-    grid_tensor = make_grid(combined_images_tensor, nrow=30, padding=2, pad_value=255)
-    grid_image = TF.to_pil_image(grid_tensor.cpu())
-    
-    draw = ImageDraw.Draw(grid_image)
-    
+def draw_partitioned_predictions(combined_images_tensor, curr_dir, device):
     img_width = combined_images_tensor.shape[-1]  # 32
     padding = 2 # padding
     
+    grid_tensor = make_grid(combined_images_tensor, nrow=30, padding=padding, pad_value=255)
+    grid_image = TF.to_pil_image(grid_tensor.to(device))
+    
+    draw = ImageDraw.Draw(grid_image)
+    
     col_interval = 3
     cell_width = img_width + padding
-    for i in range(1, grid_tensor.shape[3] // cell_width // col_interval):
+    for i in range(1, grid_tensor.shape[2] // cell_width // col_interval):
         x_pos = (i * col_interval * (img_width + padding)) - padding
         
         start_x = x_pos
@@ -393,6 +393,6 @@ def draw_partitioned_predictions(combined_images_tensor, curr_dir):
         start_y = 0
         end_y = grid_image.height
         
-        draw.line([(start_x, start_y), (end_x, end_y)], fill="white", width=2)
+        draw.line([(start_x, start_y), (end_x, end_y)], fill="yellow", width=1)
     
     grid_image.save(f"{curr_dir}/generation_result.png")
