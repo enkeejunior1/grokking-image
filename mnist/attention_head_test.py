@@ -115,18 +115,21 @@ if __name__ == "__main__":
         return parser.parse_args()
     args = parse_args()
     
+    zero_out = args.zero_out
+    stack_images = args.stack_images
+    
     now = datetime.now()
-    formatted_time = now.strftime("%m.%d.%H.%M")
+    formatted_time = now.strftime("%m-%d-%H-%M")
     
     pretrained_name = 'train_fraction_{}-num_images_{}'.format(args.train_fraction, args.num_images)
-    experiment_name = 'test_attention_head_{}'.format(formatted_time)
+    experiment_name = f"test_attention_head_{formatted_time}"
+    if zero_out:
+        experiment_name += "_zero_out"
+        
     weights_dir = os.path.join(args.generative_model_path, pretrained_name)
     results_dir = os.path.join(args.output_dir, experiment_name)
     os.makedirs(weights_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
-    
-    zero_out = args.zero_out
-    stack_images = args.stack_images
 
     n_layers = 10
     n_heads = 8

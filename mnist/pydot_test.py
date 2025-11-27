@@ -2,9 +2,6 @@ import colorsys
 import pydot
 
 def generate_rainbow_hex_colors(N):
-    """
-    N개의 레이어에 고르게 분포된 무지개색 HEX 코드 리스트를 생성합니다.
-    """
     hex_colors = []
     MAX_HUE = 0.85 
     
@@ -60,6 +57,26 @@ def draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=Fal
                         
     
     graph_attn.write_png(f"transformer_structure.png")
+
+def generate_png(dot_file, result_path):
+    dot_file_path = dot_file
+    file_name = dot_file_path.split("/")[-1].replace(".dot", ".png")
+    png_output_path = result_path + "/" + file_name
+    
+    try:
+        graphs = pydot.graph_from_dot_file(dot_file_path)
+        if not graphs:
+            print(f"No graphs found in the dot file: {dot_file_path}")
+            return  
+        else:
+            graph = graphs[0]
+            graph.write_png(png_output_path)
+            print(f"PNG file generated at: {png_output_path}")
+            
+    except pydot.InvocationException as e:
+        print(f"❌ Error during rendering. Is Graphviz installed? Details: {e}")
+    except FileNotFoundError:
+        print(f"❌ Error: DOT file not found at {dot_file_path}")
 
 
 if __name__ == "__main__":
