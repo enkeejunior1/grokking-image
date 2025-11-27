@@ -110,8 +110,8 @@ if __name__ == "__main__":
         parser.add_argument("--train_fraction", type=float, default=0.9)    # As sugested by Yonghyun
         parser.add_argument("--output_dir", type=str, default="results/")
         parser.add_argument("--num_images", type=int, default=1)    # As sugested by Yonghyun
-        parser.add_argument("--zero_out", type=bool, default=False) # Whether to zero out the deactivated heads or just fade them
-        parser.add_argument("--stack_images", type=bool, default=True) # Whether to stack images vertically
+        parser.add_argument("--zero-out", action="store_true", default=False, help="Set to True to zero out the deactivated heads.")
+        parser.add_argument("--stack-images", action="store_true", default=False, help="Disable vertical image stacking.")
         return parser.parse_args()
     args = parse_args()
     
