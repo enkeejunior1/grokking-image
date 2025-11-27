@@ -150,7 +150,7 @@ class PerturbedRF(RF):
                     handler.remove()
                     
                 # Create hook
-                curr_hook = make_head_level_attention_hook(l, h, zero_out=False)
+                curr_hook = make_head_level_attention_hook(l, h, zero_out)
                 
                 # Register a new handler for the current head
                 handler = layer.attention.register_forward_hook(curr_hook)
@@ -260,6 +260,8 @@ def generate_rainbow_hex_colors(N):
 def draw_network(n_layers, n_heads, trial_num, deactivated_heads, results_dir, zero_out=False, stats=None, save_png=True):
     if stats is not None:
         label = f"Accuracy: {stats[0]:.3f}, Avg. Confidence: {stats[1]:.3f}"
+        if zero_out:
+            label += " (zeroed heads)"
     else:
         label = "Transformer Structure"
     

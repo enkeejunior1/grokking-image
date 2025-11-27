@@ -187,7 +187,7 @@ if __name__ == "__main__":
                 rf.add_deactivated_head(*head_off)
                 
                 # Generated Images
-                curr_dir = os.path.join(results_dir, f"temp_{_trial+1}")
+                curr_dir = os.path.join(results_dir, f"temp_{(_trial+1):02d}")
                 os.makedirs(curr_dir, exist_ok=True)
                 num_vis = 100
                 result = torch.cat(

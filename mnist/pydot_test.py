@@ -58,6 +58,20 @@ def draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=Fal
     
     graph_attn.write_png(f"transformer_structure.png")
 
+
+def draw_network_test():
+    deactivated_heads = set()
+    from random import random
+    for l in range(n_layers):
+        for h in range(n_heads):
+            if random() < 0.3:
+                deactivated_heads.add((l, h))
+    results_dir = "."
+    stats = (0.85, 0.92)
+    
+    draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=True, stats=stats)
+    
+
 def generate_png(dot_file, result_path):
     dot_file_path = dot_file
     file_name = dot_file_path.split("/")[-1].replace(".dot", ".png")
@@ -79,16 +93,34 @@ def generate_png(dot_file, result_path):
         print(f"❌ Error: DOT file not found at {dot_file_path}")
 
 
-if __name__ == "__main__":
-    n_layers = 6
-    n_heads = 8
-    deactivated_heads = set()
-    from random import random
-    for l in range(n_layers):
-        for h in range(n_heads):
-            if random() < 0.3:
-                deactivated_heads.add((l, h))
-    results_dir = "."
-    stats = (0.85, 0.92)
+def modify_dots(result_path, num_trials=80):
+    import os
     
-    draw_network(n_layers, n_heads, deactivated_heads, results_dir, zero_out=True, stats=stats)
+    for trial_num in range(1, 1+num_trials):        
+        # dir_name = f"temp_{trial_num:02d}"       
+        dir_name = f"temp_{trial_num}"
+        current_subdir_path = os.path.join(result_path, dir_name)
+        if os.path.isdir(current_subdir_path):
+            for file_name in os.listdir(current_subdir_path):
+                if file_name.endswith(".dot"):
+                    dot_file_path = os.path.join(current_subdir_path, file_name)
+                    generate_png(dot_file_path, current_subdir_path)
+                    break
+        else:
+            print(f"Skipping {dir_name}: Directory not found.")
+            if trial_num > 1:
+                break 
+
+    print("DOT to PNG conversion complete.")
+
+
+if __name__ == "__main__":
+    n_layers = 10
+    n_heads = 8
+    
+    # draw_network_test()
+    
+    result_path = "results/"
+    result_path += "test_attention_head_11.27.18.15/"
+    
+    modify_dots(result_path, num_trials=n_layers*n_heads)
