@@ -93,12 +93,18 @@ def generate_png(dot_file, result_path):
         print(f"❌ Error: DOT file not found at {dot_file_path}")
 
 
+from perturbed_model import stack_images_vertically
+from PIL import Image
+
 def modify_dots(result_path, num_trials=80):
     import os
+    
+    frames = []
     
     for trial_num in range(1, 1+num_trials):        
         dir_name = f"temp_{trial_num:02d}"       
         # dir_name = f"temp_{trial_num}"
+        
         current_subdir_path = os.path.join(result_path, dir_name)
         if os.path.isdir(current_subdir_path):
             for file_name in os.listdir(current_subdir_path):
@@ -110,6 +116,21 @@ def modify_dots(result_path, num_trials=80):
             print(f"Skipping {dir_name}: Directory not found.")
             if trial_num > 1:
                 break 
+        
+        # Stack two images
+        curr_image = stack_images_vertically(current_subdir_path, result_path, trial_num, save=False)
+        frames.append(curr_image)
+    
+    first_frame = frames[0]
+    remaining_frames = frames[1:]
+    
+    first_frame.save(
+        os.path.join(result_path, "attention_head_perturbation_progression.gif"),
+        save_all=True,
+        append_images=remaining_frames,
+        duration=1000,
+        loop=0
+    )
 
     print("DOT to PNG conversion complete.")
 
@@ -121,6 +142,6 @@ if __name__ == "__main__":
     # draw_network_test()
     
     result_path = "results/"
-    result_path += "test_attention_head_11-27-18-41_zero_out/"
+    result_path += "test_attention_head_11-27-22-22_zero_out/"
     
     modify_dots(result_path, num_trials=n_layers*n_heads)

@@ -311,7 +311,7 @@ def draw_network(n_layers, n_heads, trial_num, deactivated_heads, results_dir, z
 
 from PIL import Image
 
-def stack_images_vertically(image_path, output_path, trial_num, alignment='center'):
+def stack_images_vertically(image_path, output_path, trial_num, alignment='center', save=True):
     """
     여러 이미지 파일을 불러와 수직으로 병합하고, 너비를 가장 넓은 이미지에 맞춥니다.
     
@@ -324,7 +324,7 @@ def stack_images_vertically(image_path, output_path, trial_num, alignment='cente
     """
     all_files = os.listdir(image_path)
     image_paths = []
-    for file_name in all_files:
+    for file_name in sorted(all_files):
         if file_name.endswith(".png"):
             full_path = os.path.join(image_path, file_name)
             image_paths.append(full_path)
@@ -358,9 +358,41 @@ def stack_images_vertically(image_path, output_path, trial_num, alignment='cente
         stacked_image.paste(img, (x_offset, y_offset))
         y_offset += img.height # 다음 이미지를 위해 높이 업데이트
     
-    image_name = f"stacked_result_trial_{trial_num}.png"
+    image_name = f"stacked_result_trial_{trial_num:02d}.png"
     full_path = os.path.join(output_path, image_name)
     try:
-        stacked_image.save(full_path)
+        if save:
+            stacked_image.save(full_path)
+            return
+        else:
+            return stacked_image
     except Exception as e:
         print(f"이미지 저장 오류 발생: {e}")
+
+
+from torchvision.utils import make_grid
+import torchvision.transforms.functional as TF
+from PIL import ImageDraw
+
+def draw_partitioned_predictions(combined_images_tensor, curr_dir):
+    grid_tensor = make_grid(combined_images_tensor, nrow=30, padding=2, pad_value=255)
+    grid_image = TF.to_pil_image(grid_tensor.cpu())
+    
+    draw = ImageDraw.Draw(grid_image)
+    
+    img_width = combined_images_tensor.shape[-1]  # 32
+    padding = 2 # padding
+    
+    col_interval = 3
+    cell_width = img_width + padding
+    for i in range(1, grid_tensor.shape[3] // cell_width // col_interval):
+        x_pos = (i * col_interval * (img_width + padding)) - padding
+        
+        start_x = x_pos
+        end_x = x_pos
+        start_y = 0
+        end_y = grid_image.height
+        
+        draw.line([(start_x, start_y), (end_x, end_y)], fill="white", width=2)
+    
+    grid_image.save(f"{curr_dir}/generation_result.png")

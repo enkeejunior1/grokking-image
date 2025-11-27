@@ -99,6 +99,8 @@ def head_level_perturbation_test(rf, classifier, x_gen, x_src, n_heads, sample_s
     return least_influential_head, max_accuracy, max_confidence, final_image
 
 
+from perturbed_model import draw_partitioned_predictions
+
 if __name__ == "__main__":    
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -178,7 +180,7 @@ if __name__ == "__main__":
             
             # Head-level perturbation            
             num_trials = n_layers * n_heads
-            for _trial in range(num_trials):  # Run multiple trials to find the least influential head
+            for _trial in range(1):  # Run multiple trials to find the least influential head
                 head_off, max_accuracy, max_confidence, final_image = head_level_perturbation_test(
                     rf, classifier, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
                 print(f"Trial {_trial+1}/{num_trials}: Least influential head so far: ({head_off[0]}, {head_off[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
@@ -193,7 +195,9 @@ if __name__ == "__main__":
                 result = torch.cat(
                     [x_src[:num_vis], final_image[:num_vis]], dim=1
                 ).reshape(-1, 1, 32, 32)
-                tvu.save_image(result, f"{curr_dir}/generation_result.png", nrow=30) 
+                
+                # tvu.save_image(result, f"{curr_dir}/generagittion_result.png", nrow=30)
+                draw_partitioned_predictions(result, curr_dir) 
 
                 # Draw Network Structure
                 stats = (max_accuracy, max_confidence)
