@@ -50,8 +50,8 @@ def layer_level_perturbation_test(rf, classifier, x_gen, x_src, sample_steps, sa
     print(f"Sampling completed for batch {i+1}/{dl_all.__len__()}")  
 
 
-def head_level_perturbation_test(rf, classifier, x_gen, x_src, n_heads, sample_steps, zero_out=False, save_image=False):
-    images_by_perturbed_heads = rf.perturbed_sample_head_level(x_gen, x_src, n_heads=n_heads, zero_out=zero_out, sample_steps=sample_steps)
+def head_level_perturbation_test(rf, classifier, x_gen, x_src, n_heads, sample_steps, save_image=False):
+    images_by_perturbed_heads = rf.perturbed_sample_head_level(x_gen, x_src, n_heads=n_heads, sample_steps=sample_steps)
     
     least_influential_head= None
     max_accuracy = -1
@@ -145,7 +145,7 @@ if __name__ == "__main__":
     model_size = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters: {model_size}, {model_size / 1e6}M")
 
-    rf = PerturbedRF(model)
+    rf = PerturbedRF(model, zero_out=zero_out)
     optimizer = optim.Adam(model.parameters(), lr=5e-4)
     
     ds_all = MNISTModularArithmeticDataset(p=10, split='all', train_fraction=args.train_fraction, num_images=args.num_images)
@@ -180,7 +180,7 @@ if __name__ == "__main__":
             num_trials = n_layers * n_heads
             for _trial in range(num_trials):  # Run multiple trials to find the least influential head
                 head_off, max_accuracy, max_confidence, final_image = head_level_perturbation_test(
-                    rf, classifier, x_gen, x_src, n_heads=n_heads, zero_out=zero_out, sample_steps=1, save_image=False) # T=1
+                    rf, classifier, x_gen, x_src, n_heads=n_heads, sample_steps=1, save_image=False) # T=1
                 print(f"Trial {_trial+1}/{num_trials}: Least influential head so far: ({head_off[0]}, {head_off[1]}) with accuracy {max_accuracy:.2f} and confidence {max_confidence:.2f} ")
                 
                 # Deactivate the least influential head found in this trial
@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
                 # Draw Network Structure
                 stats = (max_accuracy, max_confidence)
-                draw_network(n_layers, n_heads, _trial+1, rf.deactivated_heads, curr_dir, zero_out, stats, stack_images)
+                draw_network(n_layers, n_heads, _trial+1, rf.deactivated_heads, curr_dir, rf.zero_out, stats, stack_images)
                 
                 if stack_images:
                     stack_images_vertically(curr_dir, results_dir, _trial+1)

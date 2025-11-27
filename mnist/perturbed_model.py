@@ -91,7 +91,7 @@ class PerturbedRF(RF):
     
     def initialize_layer_level_hooks(self):
         for l, layer in enumerate(self.model.layers):
-            curr_hook = make_head_level_attention_hook(l, self.deactivated_heads, zero_out=False)
+            curr_hook = make_head_level_attention_hook(l, self.deactivated_heads, zero_out=self.zero_out)
             handler = layer.attention.register_forward_hook(curr_hook)
             self.hook_handlers[l] = handler
     
@@ -103,7 +103,7 @@ class PerturbedRF(RF):
         self.deactivated_heads.add((layer_id, head_id))
     
     def remove_deactivated_head(self, layer_id, head_id):
-        if (layer_id, head_id) in self.deactivated_heads:
+        if (layer_id, head_id) not in self.deactivated_heads:
             print(f"Head {head_id} in layer {layer_id} is NOT deactivated.")
             return
         
@@ -144,7 +144,7 @@ class PerturbedRF(RF):
         return perturbed_images
     
     @torch.no_grad()
-    def perturbed_sample_head_level(self, z, cond, n_heads, zero_out=False, sample_steps=1): # T=1
+    def perturbed_sample_head_level(self, z, cond, n_heads, sample_steps=1): # T=1
         b = z.size(0)
         dt = 1.0 / sample_steps
         dt = torch.tensor([dt] * b).to(z.device).view([b, *([1] * len(z.shape[1:]))])
@@ -267,7 +267,7 @@ def generate_rainbow_hex_colors(N):
     return hex_colors
 
 
-def draw_network(n_layers, n_heads, trial_num, deactivated_heads, results_dir, zero_out=False, stats=None, save_png=True):
+def draw_network(n_layers, n_heads, trial_num, deactivated_heads, results_dir, zero_out, stats=None, save_png=True):
     if stats is not None:
         label = f"Accuracy: {stats[0]:.3f}, Avg. Confidence: {stats[1]:.3f}"
         if zero_out:
