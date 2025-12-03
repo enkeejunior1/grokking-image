@@ -1,0 +1,4 @@
+# Ignore arch-1 and arch-2 directories
+mnist/arch-1/
+mnist/arch-2/
+
