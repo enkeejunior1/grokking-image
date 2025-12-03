@@ -165,55 +165,41 @@ class TransformerBlock(nn.Module):
         multiple_of,
         ffn_dim_multiplier,
         norm_eps,
-        only_attention=False,
     ):
         super().__init__()
         self.dim = dim
         self.head_dim = dim // n_heads
-        self.only_attention = only_attention
         self.attention = Attention(dim, n_heads)
-        if not only_attention:
-            self.feed_forward = FeedForward(
-                dim=dim,
-                hidden_dim=4 * dim,
-                multiple_of=multiple_of,
-                ffn_dim_multiplier=ffn_dim_multiplier,
-            )
+        self.feed_forward = FeedForward(
+            dim=dim,
+            hidden_dim=4 * dim,
+            multiple_of=multiple_of,
+            ffn_dim_multiplier=ffn_dim_multiplier,
+        )
         self.layer_id = layer_id
         self.attention_norm = nn.LayerNorm(dim, eps=norm_eps)
-        if not only_attention:
-            self.ffn_norm = nn.LayerNorm(dim, eps=norm_eps)
+        self.ffn_norm = nn.LayerNorm(dim, eps=norm_eps)
 
-        # adaLN_modulation output size: 6*dim for full block, 3*dim for only attention
-        adaln_output_dim = 3 * dim if only_attention else 6 * dim
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(min(dim, 1024), adaln_output_dim, bias=True),
+            nn.Linear(min(dim, 1024), 6 * dim, bias=True),
         )
 
     def forward(self, x, freqs_cis, adaln_input=None):
         if adaln_input is not None:
-            if self.only_attention:
-                shift_msa, scale_msa, gate_msa = (
-                    self.adaLN_modulation(adaln_input).chunk(3, dim=1)
-                )
-                x = x + gate_msa.unsqueeze(1) * self.attention(
-                    modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
-                )
-            else:
-                shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
-                    self.adaLN_modulation(adaln_input).chunk(6, dim=1)
-                )
-                x = x + gate_msa.unsqueeze(1) * self.attention(
-                    modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
-                )
-                x = x + gate_mlp.unsqueeze(1) * self.feed_forward(
-                    modulate(self.ffn_norm(x), shift_mlp, scale_mlp)
-                )
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+                self.adaLN_modulation(adaln_input).chunk(6, dim=1)
+            )
+
+            x = x + gate_msa.unsqueeze(1) * self.attention(
+                modulate(self.attention_norm(x), shift_msa, scale_msa), freqs_cis
+            )
+            x = x + gate_mlp.unsqueeze(1) * self.feed_forward(
+                modulate(self.ffn_norm(x), shift_mlp, scale_mlp)
+            )
         else:
             x = x + self.attention(self.attention_norm(x), freqs_cis)
-            if not self.only_attention:
-                x = x + self.feed_forward(self.ffn_norm(x))
+            x = x + self.feed_forward(self.ffn_norm(x))
 
         return x
 
@@ -252,7 +238,6 @@ class DiT_Llama(nn.Module):
         multiple_of=256,
         ffn_dim_multiplier=None,
         norm_eps=1e-5,
-        only_attention=False,
     ):
         super().__init__()
 
@@ -261,7 +246,6 @@ class DiT_Llama(nn.Module):
         self.input_size = input_size
         self.patch_size = patch_size
 
-        # Input will be concatenated along W dimension, so channels remain in_channels
         self.init_conv_seq = nn.Sequential(
             nn.Conv2d(in_channels, dim // 2, kernel_size=5, padding=2, stride=1),
             nn.SiLU(),
@@ -284,24 +268,20 @@ class DiT_Llama(nn.Module):
                     multiple_of,
                     ffn_dim_multiplier,
                     norm_eps,
-                    only_attention=only_attention,
                 )
                 for layer_id in range(n_layers)
             ]
         )
         self.final_layer = FinalLayer(dim, patch_size, self.out_channels)
-        self.n_heads = n_heads
-        self.dim = dim
-        self.freqs_cis = None  # Will be computed dynamically based on input size
+        self.freqs_cis = DiT_Llama.precompute_freqs_cis(dim // n_heads, 4096)
 
     def unpatchify(self, x):
         c = self.out_channels
         p = self.patch_size
-        h = self.input_size // p
-        w = (self.input_size * 3) // p  # 3x width after concatenation
+        h = w = int(x.shape[1] ** 0.5)
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
         x = torch.einsum("nhwpqc->nchpwq", x)
-        imgs = x.reshape(shape=(x.shape[0], c, h * p, w * p))
+        imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
         return imgs
 
     def patchify(self, x):
@@ -318,42 +298,23 @@ class DiT_Llama(nn.Module):
         return x
 
     def forward(self, x, t, y):
-        input_x = x.clone()
-
-        src_channels = x.size(1)
-        src_height = x.size(2)
-        src_width = x.size(3)
-
-        # Concatenate along W dimension (dim=3)
-        x = torch.cat([x, y], dim=3)  # Now shape is (B, C, H, 3*W)
-        
-        x = self.init_conv_seq(x)
-        x = self.patchify(x)
-        
-        # Compute 2D positional embeddings for the current spatial size
-        B, num_patches, _ = x.shape
-        H_patches = src_height // self.patch_size
-        W_patches = (src_width * 3) // self.patch_size  # 3x width after concatenation
-        
-        if self.freqs_cis is None or self.freqs_cis.size(0) != num_patches:
-            self.freqs_cis = DiT_Llama.precompute_freqs_cis_2d(
-                self.dim // self.n_heads, 
-                H_patches, 
-                W_patches
-            ).to(x.device)
-        
         self.freqs_cis = self.freqs_cis.to(x.device)
-        
+        src_channels = x.size(1)
+
+        x = self.init_conv_seq(
+            torch.cat([x, y], dim=1)
+        )
+        x = self.patchify(x)
         x = self.x_embedder(x)
         t = self.t_embedder(t)  # (N, D)
         adaln_input = t.to(x.dtype)
 
         for layer in self.layers:
-            x = layer(x, self.freqs_cis, adaln_input=adaln_input)
+            x = layer(x, self.freqs_cis[: x.size(1)], adaln_input=adaln_input)
 
         x = self.final_layer(x, adaln_input)
-        x = self.unpatchify(x)  # (N, out_channels, H, 3*W)
-        return input_x - x[:, :src_channels, :src_height, :src_width]
+        x = self.unpatchify(x)  # (N, out_channels, H, W)
+        return x[:, :src_channels, :, :]
 
     def forward_with_cfg(self, x, t, y, cfg_scale):
         half = x[: len(x) // 2]
@@ -366,37 +327,12 @@ class DiT_Llama(nn.Module):
         return torch.cat([eps, rest], dim=1)
 
     @staticmethod
-    def precompute_freqs_cis_2d(dim, height, width, theta=10000.0):
-        """
-        Precompute 2D rotary positional embeddings for height and width.
-        dim: dimension to split between height and width
-        height: number of patches in height dimension
-        width: number of patches in width dimension (3x original width)
-        """
-        dim_h = dim // 2  # half for height
-        dim_w = dim - dim_h  # half for width
-        
-        # Height frequencies
-        freqs_h = 1.0 / (theta ** (torch.arange(0, dim_h, 2)[: (dim_h // 2)].float() / dim_h))
-        t_h = torch.arange(height)
-        freqs_h = torch.outer(t_h, freqs_h).float()
-        freqs_cis_h = torch.polar(torch.ones_like(freqs_h), freqs_h)
-        
-        # Width frequencies
-        freqs_w = 1.0 / (theta ** (torch.arange(0, dim_w, 2)[: (dim_w // 2)].float() / dim_w))
-        t_w = torch.arange(width)
-        freqs_w = torch.outer(t_w, freqs_w).float()
-        freqs_cis_w = torch.polar(torch.ones_like(freqs_w), freqs_w)
-        
-        # Create 2D grid
-        freqs_cis_h = freqs_cis_h.unsqueeze(1).repeat(1, width, 1)  # (H, W, dim_h/2)
-        freqs_cis_w = freqs_cis_w.unsqueeze(0).repeat(height, 1, 1)  # (H, W, dim_w/2)
-        
-        # Concatenate and flatten to (H*W, dim/2)
-        freqs_cis_2d = torch.cat([freqs_cis_h, freqs_cis_w], dim=-1)
-        freqs_cis_2d = freqs_cis_2d.reshape(-1, dim // 2)
-        
-        return freqs_cis_2d
+    def precompute_freqs_cis(dim, end, theta=10000.0):
+        freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+        t = torch.arange(end)
+        freqs = torch.outer(t, freqs).float()
+        freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
+        return freqs_cis
 
 
 def DiT_Llama_600M_patch2(**kwargs):

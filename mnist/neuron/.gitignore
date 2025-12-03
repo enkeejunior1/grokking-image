@@ -1,0 +1,10 @@
+wandb/
+weights/
+__pycache__/
+logs/
+results/
+data/
+!weights/train_fraction_0.9-num_images_1/model_epoch_47000.pth
+!*/*/model_final.pth
+ffn*/
+inference_*/

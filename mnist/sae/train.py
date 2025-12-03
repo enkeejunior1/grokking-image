@@ -79,10 +79,8 @@ class MNISTModularArithmeticDataset(Dataset):
         img_result = self.digit_images[result][np.random.randint(len(self.digit_images[result]))]
         assert img_a.shape == img_b.shape == img_result.shape == (1, 32, 32)
         
-        img_tgt = img_result  # Shape: (1, 32, 32)
-        # Concatenate along width dimension (dim=2) to get shape (1, 32, 64)
-        img_src = torch.cat([img_a, img_b], dim=2)
-        assert img_src.shape == (1, 32, 64), f"Expected img_src shape (1, 32, 64), got {img_src.shape}"
+        img_tgt = img_result
+        img_src = torch.cat([img_a, img_b], dim=0)
         label_tgt = torch.tensor(result, dtype=torch.long)
         return img_tgt, img_src, label_tgt
 
@@ -137,23 +135,17 @@ if __name__ == "__main__":
         parser.add_argument("--train_fraction", type=float, default=0.7)
         parser.add_argument("--output_dir", type=str, default="results/")
         parser.add_argument("--num_images", type=int, default=1)
-        parser.add_argument("--depth", type=int, default=10)
-        parser.add_argument("--only_attention", action="store_true", help="Use only attention layers without feedforward")
         return parser.parse_args()
     args = parse_args()
     
-    exp_name = 'train_fraction_{}-num_images_{}-depth_{}'.format(args.train_fraction, args.num_images, args.depth)
-    if args.only_attention:
-        exp_name += '-only_attention'
+    exp_name = 'train_fraction_{}-num_images_{}'.format(args.train_fraction, args.num_images)
     weights_dir = os.path.join(args.generative_model_path, exp_name)
     results_dir = os.path.join(args.output_dir, exp_name)
     os.makedirs(weights_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
 
-    # MNIST is grayscale (1 channel), input size is 32x32
     model = DiT_Llama(
-        in_channels=1, input_size=32, dim=256, n_layers=args.depth, n_heads=8,
-        only_attention=args.only_attention,
+        3, 32, dim=256, n_layers=10, n_heads=8,
     ).cuda()
     
     classifier = MNISTClassifier().cuda()
@@ -172,7 +164,7 @@ if __name__ == "__main__":
 
     wandb.init(project=f"mnist_grokking", name=exp_name)
     tol = 0
-    for epoch in tqdm(range(1000000)):
+    for epoch in tqdm(range(50000)):
         for i, (x_tgt, x_src, _) in enumerate(dl_train):
             x_tgt, x_src = x_tgt.cuda(), x_src.cuda()
             optimizer.zero_grad()
@@ -184,10 +176,6 @@ if __name__ == "__main__":
 
         if epoch % 1000 == 0:
             torch.save(model.state_dict(), os.path.join(weights_dir, f"model_epoch_{epoch}.pth"))
-            torch.save({
-                'optimizer_state_dict': optimizer.state_dict(),
-                'epoch': epoch
-            }, os.path.join(weights_dir, f"checkpoint_epoch_{epoch}.pth"))
 
         if epoch % 10 != 0:
             continue
@@ -206,17 +194,14 @@ if __name__ == "__main__":
             images_valid = rf.sample(x_tgt_valid, x_src_valid)
 
             num_vis = 4
-            # x_src has shape (B, 1, 32, 64) containing two 32x32 images side by side
-            # images_train[-1] has shape (B, 1, 32, 32) containing the generated result
-            # Concatenate along width to show: img_a | img_b | result
             result_train = torch.cat(
-                [x_src_train[:num_vis], images_train[-1][:num_vis]], dim=3
-            )  # (num_vis, 1, 32, 96)
+                [x_src_train[:num_vis], images_train[-1][:num_vis]], dim=1
+            ).reshape(-1, 1, 32, 32)
             result_valid = torch.cat(
-                [x_src_valid[:num_vis], images_valid[-1][:num_vis]], dim=3
-            )  # (num_vis, 1, 32, 96)
-            tvu.save_image(result_train, f"{results_dir}/sample_{epoch}_train.png", nrow=1)
-            tvu.save_image(result_valid, f"{results_dir}/sample_{epoch}_valid.png", nrow=1)
+                [x_src_valid[:num_vis], images_valid[-1][:num_vis]], dim=1
+            ).reshape(-1, 1, 32, 32)
+            tvu.save_image(result_train, f"{results_dir}/sample_{epoch}_train.png", nrow=3)
+            tvu.save_image(result_valid, f"{results_dir}/sample_{epoch}_valid.png", nrow=3)
 
             # gif = []
             # for image in images_train:
@@ -258,13 +243,13 @@ if __name__ == "__main__":
                 accuracy = (preds == label_tgt).mean()
                 wandb.log({"Valid Accuracy": accuracy})
                 
-                if accuracy == 1.0:
-                    tol += 1
-                    if tol > 25:
-                        torch.save(model.state_dict(), os.path.join(weights_dir, f"model_final.pth"))
-                        exit()
-                else:
-                    tol = 0
+                # if accuracy > 0.99:
+                #     tol += 1
+                #     if tol > 25:
+                #         torch.save(model.state_dict(), os.path.join(weights_dir, f"model_final.pth"))
+                #         exit()
+                # else:
+                #     tol = 0
             classifier.train()
         rf.model.train()
     torch.save(model.state_dict(), os.path.join(weights_dir, f"model_final.pth"))

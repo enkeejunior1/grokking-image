@@ -4,3 +4,4 @@ __pycache__/
 logs/
 results/
 data/
+!weights/train_fraction_0.9-num_images_1/model_final.pth

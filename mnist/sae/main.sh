@@ -4,7 +4,7 @@
 #SBATCH --error=logs/%x_%j.err
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --partition=b200-mig90
+#SBATCH --partition=dgx-b200
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=32
 #SBATCH --time=24:00:00
@@ -30,4 +30,4 @@ echo "Job ID: $SLURM_JOB_ID"
 
 # recommend setting: train_fraction 0.7, num_images 1, 4, 16, 64, 256, 1024, 4096
 num_images=1
-python train.py --train_fraction 0.9 --num_images $num_images --depth 1 --only_attention
+python train.py --train_fraction 0.9 --num_images $num_images

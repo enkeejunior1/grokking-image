@@ -30,4 +30,4 @@ echo "Job ID: $SLURM_JOB_ID"
 
 # recommend setting: train_fraction 0.7, num_images 1, 4, 16, 64, 256, 1024, 4096
 num_images=1
-python train.py --train_fraction 0.9 --num_images $num_images --depth 1 --only_attention
+python train.py --train_fraction 0.9 --num_images $num_images --depth 1 

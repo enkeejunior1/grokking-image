@@ -261,17 +261,7 @@ class DiT_Llama(nn.Module):
         self.input_size = input_size
         self.patch_size = patch_size
 
-        # Input will be concatenated along W dimension, so channels remain in_channels
-        self.init_conv_seq = nn.Sequential(
-            nn.Conv2d(in_channels, dim // 2, kernel_size=5, padding=2, stride=1),
-            nn.SiLU(),
-            nn.GroupNorm(32, dim // 2),
-            nn.Conv2d(dim // 2, dim // 2, kernel_size=5, padding=2, stride=1),
-            nn.SiLU(),
-            nn.GroupNorm(32, dim // 2),
-        )
-
-        self.x_embedder = nn.Linear(patch_size * patch_size * dim // 2, dim, bias=True)
+        self.x_embedder = nn.Linear(patch_size * patch_size * in_channels, dim, bias=True)
         nn.init.constant_(self.x_embedder.bias, 0)
         self.t_embedder = TimestepEmbedder(min(dim, 1024))
 
@@ -327,7 +317,6 @@ class DiT_Llama(nn.Module):
         # Concatenate along W dimension (dim=3)
         x = torch.cat([x, y], dim=3)  # Now shape is (B, C, H, 3*W)
         
-        x = self.init_conv_seq(x)
         x = self.patchify(x)
         
         # Compute 2D positional embeddings for the current spatial size
